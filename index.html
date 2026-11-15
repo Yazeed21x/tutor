@@ -2,7 +2,7 @@
 <html lang="ar" dir="rtl">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
 <title>المدرس الخصوصي</title>
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="المدرس">
@@ -17,7 +17,7 @@
 }
 [hidden]{display:none!important}
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
-html,body{margin:0;height:100%}
+html,body{margin:0;height:100%;overflow-x:hidden;max-width:100vw}
 body{background:var(--bg);color:var(--ink);font-family:"IBM Plex Sans Arabic",system-ui,sans-serif;display:flex;flex-direction:column;height:100dvh;overflow:hidden}
 button{font-family:inherit;cursor:pointer}
 /* header */
@@ -133,7 +133,7 @@ table.jr td.num{direction:ltr;font-weight:600;min-width:90px}
 .chip img{width:34px;height:34px;object-fit:cover;border-radius:7px}
 .chip button{background:none;border:none;color:var(--muted);font-size:16px;padding:0 4px}
 .row2{display:flex;align-items:flex-end;gap:6px}
-textarea{flex:1;resize:none;background:transparent;border:none;outline:none;color:var(--ink);font-family:inherit;font-size:15px;line-height:1.6;max-height:130px;min-height:26px;padding:6px 4px}
+textarea{flex:1;resize:none;background:transparent;border:none;outline:none;color:var(--ink);font-family:inherit;font-size:16px;line-height:1.6;max-height:130px;min-height:26px;padding:6px 4px}
 textarea::placeholder{color:#64748b}
 .ibtn{width:38px;height:38px;border-radius:11px;border:1px solid var(--line);background:#1a2744;color:var(--ink);display:grid;place-items:center;flex:none}
 .ibtn svg{width:19px;height:19px}
@@ -150,12 +150,12 @@ textarea::placeholder{color:#64748b}
 .seg{display:flex;background:#0b1328;border:1px solid var(--line);border-radius:10px;padding:3px}
 .seg button{flex:1;background:none;border:none;color:var(--muted);padding:8px;border-radius:8px;font-size:14px}
 .seg button.on{background:#1f3a2b;color:#bbf7d0}
-select{width:100%;background:#0b1328;color:var(--ink);border:1px solid var(--line);border-radius:10px;padding:9px;font-family:inherit;font-size:14px}
+select{width:100%;background:#0b1328;color:var(--ink);border:1px solid var(--line);border-radius:10px;padding:9px;font-family:inherit;font-size:16px}
 input[type=range]{width:100%;accent-color:var(--accent)}
 .tog{display:flex;align-items:center;justify-content:space-between;font-size:14px}
 .tog input{width:20px;height:20px;accent-color:var(--accent)}
 .hint{font-size:12px;color:var(--muted);line-height:1.6;margin-top:4px}
-.inp{width:100%;background:#0b1328;color:var(--ink);border:1px solid var(--line);border-radius:10px;padding:9px;font-family:inherit;font-size:15px;direction:ltr;text-align:left}
+.inp{width:100%;background:#0b1328;color:var(--ink);border:1px solid var(--line);border-radius:10px;padding:9px;font-family:inherit;font-size:16px;direction:ltr;text-align:left}
 .sh{max-height:92dvh;overflow-y:auto}
 .done{width:100%;background:var(--accent);border:none;color:#052e16;font-weight:700;border-radius:12px;padding:11px;font-size:15px}
 @media (max-width:600px){
@@ -199,8 +199,9 @@ input[type=range]{width:100%;accent-color:var(--accent)}
 
 <div id="sheet"><div class="sh">
   <h3>إعدادات المدرس</h3>
-  <div class="fld"><label>مفتاح Gemini API</label><input id="kGemini" class="inp" type="password" autocomplete="off" placeholder="AIza..."><div class="hint" id="gStatus">تطلعه مجانًا من aistudio.google.com ← Get API key.</div></div>
-  <div class="fld"><label>نموذج الشرح</label><select id="mdlSel"><option value="">تلقائي (أفضل Flash متاح)</option></select></div>
+  <div class="fld"><label>مفتاح Claude API (للشرح)</label><input id="kClaude" class="inp" type="password" autocomplete="off" placeholder="sk-ant-..."></div>
+  <div class="fld"><label>ذكاء الشرح</label><select id="mdlSel"><option value="claude-sonnet-5-5">Claude Sonnet — سريع (مستحسن)</option><option value="claude-opus-5-5">Claude Opus — الأذكى وأبطأ</option></select></div>
+  <div class="fld"><label>مفتاح Gemini API (للصوت الطبيعي)</label><input id="kGemini" class="inp" type="password" autocomplete="off" placeholder="AIza..."><div class="hint" id="gStatus">مجاني من aistudio.google.com — للصوت فقط.</div></div>
   <div class="fld"><label>مصدر الصوت</label><div class="seg" id="eng"><button data-v="gemini">Gemini</button><button data-v="azure">Azure</button><button data-v="device">الجهاز</button></div></div>
   <div class="fld" id="azFields"><label>Azure (اختياري)</label><input id="kAzure" class="inp" type="password" autocomplete="off" placeholder="KEY 1" style="margin-bottom:6px"><input id="kRegion" class="inp" autocomplete="off" autocapitalize="off" placeholder="westeurope"></div>
   <div class="hint" style="margin:-6px 0 14px">المفاتيح تنحفظ في جهازك بس.</div>
@@ -221,8 +222,8 @@ const ICON_PLAY='<svg viewBox="0 0 24 24" fill="currentColor"><path d="M17 5v14L
 let tts=null;
 const hasWeb=typeof window.speechSynthesis!=='undefined' && typeof window.SpeechSynthesisUtterance!=='undefined';
 
-const S={level:'متقدم',rate:1,muted:false,webVoiceURI:'',model:'',azVoice:'ar-SA-HamedNeural',engine:'gemini',gVoice:'Charon'};
-const K={gemini:'',azure:'',region:''};
+const S={level:'متقدم',rate:1,muted:false,webVoiceURI:'',model:'claude-sonnet-5-5',azVoice:'ar-SA-HamedNeural',engine:'gemini',gVoice:'Charon'};
+const K={claude:'',gemini:'',azure:'',region:''};
 try{Object.assign(K,JSON.parse(localStorage.getItem('tutor.keys')||'{}'))}catch(e){}
 function saveKeys(){try{localStorage.setItem('tutor.keys',JSON.stringify(K))}catch(e){}}
 try{Object.assign(S,JSON.parse(localStorage.getItem('tutor.set')||'{}'))}catch(e){}
@@ -254,7 +255,7 @@ function sys(){return `أنت مدرس خصوصي سعودي خبير، تشرح
 
 قواعد الشرح:
 - من 6 إلى 12 خطوة: فكّك السؤال وحدد المطلوب، ثم المفهوم الأساسي، ثم الحل خطوة بخطوة بالأرقام، ثم الخطأ الشائع أو الفخ إن وُجد، واختم بعنصر answer.
-- say: ${S.engine==='gemini'?'يُقرأ بصوت طبيعي، فاكتبه من جملة إلى ثلاث جمل باللهجة السعودية البيضاء الطبيعية كأنك مدرس سعودي يتكلم مع طالبه.':'يُقرأ بصوت آلي، فاكتبه من جملة إلى ثلاث جمل بالعربية الفصحى المبسطة السليمة (بدون عامية)، بأسلوب مدرس ودود يتكلم.'} اكتب الأرقام فيه بالكلمات العربية لا بالأرقام (مثل: خمسمئة ألف ريال، عشرة بالمئة)، واكتب أسماء المعايير بالعربي (مثل: المعيار الدولي للتقرير المالي رقم خمسة عشر). بدون رموز أو اختصارات أو أقواس أو كلمات إنجليزية. لا تقرأ السبورة حرفيًا، بل اشرح ما تكتبه ولماذا.
+- say: ${(S.engine==='gemini'&&K.gemini)?'يُقرأ بصوت طبيعي، فاكتبه من جملة إلى ثلاث جمل باللهجة السعودية البيضاء الطبيعية كأنك مدرس سعودي يتكلم مع طالبه.':'يُقرأ بصوت آلي، فاكتبه من جملة إلى ثلاث جمل بالعربية الفصحى المبسطة السليمة (بدون عامية)، بأسلوب مدرس ودود يتكلم.'} اكتب الأرقام فيه بالكلمات العربية لا بالأرقام (مثل: خمسمئة ألف ريال، عشرة بالمئة)، واكتب أسماء المعايير بالعربي (مثل: المعيار الدولي للتقرير المالي رقم خمسة عشر). بدون رموز أو اختصارات أو أقواس أو كلمات إنجليزية. لا تقرأ السبورة حرفيًا، بل اشرح ما تكتبه ولماذا.
 - السبورة: كلمات مفتاحية وأرقام ومعادلات فقط، بدون فقرات طويلة. من 1 إلى 3 عناصر في كل خطوة. أول خطوة فيها heading.
 - اكتب الأرقام بالأرقام 0-9 مع فواصل الآلاف. قيم amount في journal أرقام وليست نصوصًا.
 - سؤال اختيار من متعدد: اعرض كل الخيارات بعنصر options وmark = none، ثم في خطوات لاحقة أعد عرضها مع تعليم الخاطئة wrong والصحيحة right مع سبب الاستبعاد.
@@ -396,11 +397,11 @@ async function loadModels(){
 }
 function textModel(){if(S.model&&G.text.includes(S.model))return S.model;return G.text.find(n=>/flash/.test(n)&&!/lite/.test(n))||G.text[0]||'gemini-2.5-flash';}
 function updGStatus(){const h=document.getElementById('gStatus');if(!h)return;
-  if(!K.gemini)h.textContent='تطلعه مجانًا من aistudio.google.com ← Get API key.';
+  if(!K.gemini)h.textContent='مجاني من aistudio.google.com — للصوت فقط. بدونه يستخدم صوت الجهاز.';
   else if(G.err)h.textContent='⚠️ المفتاح ما اشتغل: '+G.err;
-  else if(G.loaded)h.textContent='✅ متصل — الشرح: '+textModel()+(G.tts.length?' • الصوت: '+G.tts[0]:' • ما فيه نموذج صوت متاح');
+  else if(G.loaded)h.textContent=G.tts.length?'✅ الصوت جاهز: '+G.tts[0]:'⚠️ المفتاح شغال بس ما فيه نموذج صوت متاح';
   else h.textContent='يتحقق من المفتاح…';}
-function fillModels(){const sel=document.getElementById('mdlSel');if(!sel)return;sel.innerHTML='<option value="">تلقائي (أفضل Flash متاح)</option>';G.text.forEach(n=>{const o=el('option',null,n);o.value=n;sel.append(o);});sel.value=G.text.includes(S.model)?S.model:'';}
+function fillModels(){const sel=document.getElementById('mdlSel');if(sel)sel.value=/opus/.test(S.model)?'claude-opus-5-5':'claude-sonnet-5-5';}
 async function geminiTTS(text){
   if(!G.tts.length)throw Object.assign(new Error('no tts model'),{status:0});
   const body={contents:[{parts:[{text:'اقرأ النص التالي بصوت مدرس سعودي ودود وواضح، بنبرة طبيعية كأنه يشرح لطالب قدامه:\n'+text}]}],generationConfig:{responseModalities:['AUDIO'],speechConfig:{voiceConfig:{prebuiltVoiceConfig:{voiceName:S.gVoice}}}}};
@@ -540,41 +541,45 @@ async function gFetch(path,body,signal){
 }
 async function gErr(res){let m='';try{const j=await res.json();m=(j.error&&j.error.message)||'';}catch(e){}const err=new Error(m||('HTTP '+res.status));err.status=res.status;return err;}
 function partsText(j){const parts=(((j.candidates||[])[0]||{}).content||{}).parts||[];let t='';parts.forEach(p=>{if(p.text&&!p.thought)t+=p.text;});return t;}
-async function callClaude(msgs,onText,signal){
-  if(!G.loaded)await loadModels();
-  const model=textModel();st.lastModel=model;
-  const gc={maxOutputTokens:16384};
-  if(/gemini-2\.5/.test(model))gc.thinkingConfig={thinkingBudget:/lite/.test(model)?0:512};
-  else if(/gemini-[3-9]/.test(model))gc.thinkingConfig={thinkingLevel:'low'};
-  const body={systemInstruction:{parts:[{text:'أنت مدرس على سبورة. مخرجاتك دائمًا كائنات JSON بالصيغة المطلوبة في رسالة المستخدم، كل خطوة في سطر واحد، بدون أي نص خارجها.'}]},contents:toGemini(msgs),generationConfig:gc};
-  let text='';st.lastFinish='';
+function linkedAbort(signal,ms){const lc=new AbortController();const st2={timedOut:false};
+  if(signal){if(signal.aborted)lc.abort();else signal.addEventListener('abort',()=>lc.abort());}
+  st2.timer=setTimeout(()=>{st2.timedOut=true;lc.abort();},ms);st2.ctrl=lc;st2.clear=()=>clearTimeout(st2.timer);return st2;}
+async function claudeOnce(model,msgs,onText,signal){
+  st.lastModel=model;let text='';const la=linkedAbort(signal,60000);
   try{
-    let res=await gFetch('/models/'+model+':streamGenerateContent?alt=sse',body,signal);
-    if(!res.ok){const er=await gErr(res);if(res.status===400&&/think/i.test(er.message)){delete gc.thinkingConfig;res=await gFetch('/models/'+model+':streamGenerateContent?alt=sse',body,signal);if(!res.ok)throw await gErr(res);}else throw er;}
+    const res=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',signal:la.ctrl.signal,headers:{'content-type':'application/json','x-api-key':K.claude.trim(),'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},body:JSON.stringify({model,max_tokens:8000,stream:true,system:'أنت مدرس على سبورة. مخرجاتك دائمًا كائنات JSON بالصيغة المطلوبة في رسالة المستخدم، كل خطوة في سطر واحد، بدون أي نص خارجها.',messages:msgs})});
+    if(!res.ok){let m='';try{const j=await res.json();m=(j.error&&j.error.message)||'';}catch(e){}const err=new Error(m||('HTTP '+res.status));err.status=res.status;throw err;}
     const reader=res.body.getReader(),dec=new TextDecoder();let buf='';
     for(;;){const {done,value}=await reader.read();if(done)break;buf+=dec.decode(value,{stream:true});let i;
       while((i=buf.indexOf('\n'))>=0){const line=buf.slice(0,i).trim();buf=buf.slice(i+1);
         if(!line.startsWith('data:'))continue;let j;try{j=JSON.parse(line.slice(5).trim());}catch(e){continue;}
-        if(j.error)throw new Error(j.error.message||'خطأ');
-        const fr=((j.candidates||[])[0]||{}).finishReason;if(fr)st.lastFinish=fr;
-        const add=partsText(j);if(add){text+=add;onText(text);}}}
-    return text;
-  }catch(e){
-    if(e.status||(signal&&signal.aborted)||text)throw e;
-    // network/stream failure -> one retry without streaming
-    $('#capText').textContent='…يحاول مرة ثانية بدون بث مباشر';
-    const res=await gFetch('/models/'+model+':generateContent',body,signal);
-    if(!res.ok)throw await gErr(res);
-    const j=await res.json();st.lastFinish=((j.candidates||[])[0]||{}).finishReason||'';text=partsText(j);onText(text);return text;
+        if(j.type==='content_block_delta'&&j.delta&&j.delta.type==='text_delta'){la.clear();text+=j.delta.text;onText(text);}
+        else if(j.type==='message_delta'&&j.delta&&j.delta.stop_reason)st.lastFinish=j.delta.stop_reason;
+        else if(j.type==='error'){const e=new Error((j.error&&j.error.message)||'خطأ');e.status=/overload/i.test(e.message)?529:0;throw e;}}}
+    la.clear();return text;
+  }catch(e){la.clear();if(text)return text;if(la.timedOut&&!(signal&&signal.aborted)){const t=new Error('timeout');t.status='timeout';throw t;}throw e;}
+}
+async function callClaude(msgs,onText,signal){
+  const first=/opus/.test(S.model)?'claude-opus-5-5':'claude-sonnet-5-5';
+  const order=[first,first==='claude-opus-5-5'?'claude-sonnet-5-5':'claude-opus-5-5'];
+  let lastErr=null;
+  for(let k=0;k<order.length;k++){
+    try{return await claudeOnce(order[k],msgs,onText,signal);}
+    catch(e){lastErr=e;if(signal&&signal.aborted)throw e;
+      const retry=e.status===529||e.status===500||e.status===503||e.status==='timeout'||e.status===404;
+      if(!retry||k===order.length-1)throw e;
+      $('#capText').textContent='…'+order[k]+' مزحوم، أجرّب '+order[k+1];}
   }
+  throw lastErr;
 }
 function imgToBlock(file){return new Promise((res,rej)=>{const im=new Image();im.onload=()=>{const m=1568;let w=im.naturalWidth,h=im.naturalHeight;const sc=Math.min(1,m/Math.max(w,h));w=Math.round(w*sc);h=Math.round(h*sc);const c=document.createElement('canvas');c.width=w;c.height=h;c.getContext('2d').drawImage(im,0,0,w,h);res({type:'image',source:{type:'base64',media_type:'image/jpeg',data:c.toDataURL('image/jpeg',0.85).split(',')[1]}});};im.onerror=rej;im.src=URL.createObjectURL(file);});}
 function errMsg(e){const s=e&&e.status;const m=(e&&e.message)||'';
-  if(/API key not valid|API_KEY_INVALID/i.test(m)||s===401||s===403)return 'مفتاح Gemini غير صحيح أو ما له صلاحية. راجعه من الإعدادات.';
-  if(s===429||/quota|exhausted/i.test(m))return 'خلصت الحصة المجانية مؤقتًا (بالدقيقة أو اليوم). انتظر شوي وجرب، أو اختر نموذج ثاني من الإعدادات.';
-  if(s===404)return 'النموذج غير متاح: '+m+' — اختر نموذج ثاني من الإعدادات.';
-  if(s===503||/overloaded|unavailable/i.test(m))return 'خدمة Gemini مزحومة الحين. جرّب بعد شوي.';
-  if(/Failed to fetch|Load failed|NetworkError/i.test(m))return 'انقطع الاتصال مع Gemini ('+m+') — النموذج: '+(st.lastModel||'?')+'. افتح الإعدادات وشف هل يطلع ✅ متصل، وجرّب تختار نموذج ثاني من القائمة.';
+  if(s===401||/x-api-key|authentication/i.test(m))return 'مفتاح Claude غير صحيح. راجعه من الإعدادات.';
+  if(/credit|balance|billing/i.test(m))return 'رصيد Claude API خلص أو ما انشحن. اشحن من console.anthropic.com ← Billing.';
+  if(s===404)return 'النموذج غير متاح لحسابك: '+m;
+  if(s===429)return 'وصلت حد الطلبات في الدقيقة. انتظر دقيقة وجرّب.';
+  if(s===529||s===503||s==='timeout'||/overload/i.test(m))return 'Claude مزحوم الحين. جرّب بعد شوي.';
+  if(/Failed to fetch|Load failed|NetworkError/i.test(m))return 'انقطع الاتصال ('+m+'). تأكد من الإنترنت وجرّب.';
   return 'صار خطأ: '+m;}
 
 /* ---------- ask ---------- */
@@ -609,7 +614,7 @@ async function ask(question,isFollow){
 function submit(){
   const q=$('#q').value.trim();
   if(!q&&!st.images.length)return;
-  if(!K.gemini){openSettings();return;}
+  if(!K.claude){openSettings();return;}
   if(cloudVoice())unlockAudio();
   else if(hasWeb&&!S.muted){try{const u=new SpeechSynthesisUtterance(' ');u.volume=0;speechSynthesis.speak(u);}catch(e){}}
   const isFollow=st.msgs.length>0;
@@ -654,8 +659,8 @@ function fillVoices(){
 }
 $('#testVoice').onclick=()=>{unlockAudio();stopSpeech();st.azWarned=false;speak('هلا والله، أنا مدرسك الخصوصي. خلنا نبدأ الدرس خطوة خطوة، وإذا ما فهمت أي نقطة اسألني على طول.',{cancelled:false,skip:false});};
 $('#voiceSel').onchange=e=>{const v=e.target.value;if(v.startsWith('g:'))S.gVoice=v.slice(2);else if(v.startsWith('a:'))S.azVoice=v.slice(2);else if(v.startsWith('w:')){S.webVoiceURI=v.slice(2);pickWebVoice();}saveSet();};
-['kGemini','kAzure','kRegion'].forEach((id,i)=>{const k=['gemini','azure','region'][i];const inp=document.getElementById(id);inp.value=K[k]||'';inp.addEventListener('change',()=>{K[k]=inp.value.trim();saveKeys();if(k==='gemini'){G.loaded=false;updGStatus();loadModels();}fillVoices();});});
-$('#mdlSel').onchange=e=>{S.model=e.target.value;saveSet();updGStatus();};
+['kClaude','kGemini','kAzure','kRegion'].forEach((id,i)=>{const k=['claude','gemini','azure','region'][i];const inp=document.getElementById(id);inp.value=K[k]||'';inp.addEventListener('change',()=>{K[k]=inp.value.trim();saveKeys();if(k==='gemini'){G.loaded=false;updGStatus();loadModels();}fillVoices();});});
+$('#mdlSel').onchange=e=>{S.model=e.target.value;saveSet();};
 document.querySelectorAll('#eng button').forEach(b=>b.onclick=()=>{S.engine=b.dataset.v;saveSet();syncSettings();fillVoices();});
 function openSettings(){fillVoices();syncSettings();updGStatus();fillModels();$('#sheet').classList.add('show');}
 function syncSettings(){
@@ -672,8 +677,9 @@ if(hasWeb){try{speechSynthesis.onvoiceschanged=()=>{pickWebVoice();if($('#sheet'
 
 /* ---------- init ---------- */
 $('#imgBtn').hidden=false;
-if(!K.gemini){showEmpty('أول مرة؟ اضغط زر الإعدادات فوق وحط مفتاح Gemini (مجاني من aistudio.google.com).');setTimeout(openSettings,400);}
-else{showEmpty();loadModels();}
+if(!K.claude){showEmpty('أول مرة؟ اضغط زر الإعدادات فوق وحط مفتاح Claude (ومفتاح Gemini للصوت).');setTimeout(openSettings,400);}
+else showEmpty();
+if(K.gemini)loadModels();
 setStatus('جاهز');
 })();
 </script>
