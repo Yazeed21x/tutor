@@ -255,7 +255,7 @@ function sys(){return `أنت مدرس خصوصي سعودي خبير، تشرح
 
 قواعد الشرح:
 - من 6 إلى 12 خطوة: فكّك السؤال وحدد المطلوب، ثم المفهوم الأساسي، ثم الحل خطوة بخطوة بالأرقام، ثم الخطأ الشائع أو الفخ إن وُجد، واختم بعنصر answer.
-- say: ${(S.engine==='gemini'&&K.gemini)?'يُقرأ بصوت طبيعي، فاكتبه من جملة إلى ثلاث جمل باللهجة السعودية البيضاء الطبيعية كأنك مدرس سعودي يتكلم مع طالبه.':'يُقرأ بصوت آلي، فاكتبه من جملة إلى ثلاث جمل بالعربية الفصحى المبسطة السليمة (بدون عامية)، بأسلوب مدرس ودود يتكلم.'} اكتب الأرقام فيه بالكلمات العربية لا بالأرقام (مثل: خمسمئة ألف ريال، عشرة بالمئة)، واكتب أسماء المعايير بالعربي (مثل: المعيار الدولي للتقرير المالي رقم خمسة عشر). بدون رموز أو اختصارات أو أقواس أو كلمات إنجليزية. لا تقرأ السبورة حرفيًا، بل اشرح ما تكتبه ولماذا.
+- say: ${(S.engine==='gemini'&&K.gemini)?'يُقرأ بصوت طبيعي، فاكتبه من جملة إلى ثلاث جمل باللهجة السعودية البيضاء الطبيعية كأنك مدرس سعودي يتكلم مع طالبه.':'يُقرأ بصوت آلي، فاكتبه من جملة إلى ثلاث جمل بالعربية الفصحى المبسطة السليمة (بدون عامية)، بأسلوب مدرس ودود يتكلم.'} اكتب الأرقام فيه بالكلمات العربية لا بالأرقام (مثل: خمسمئة ألف ريال، عشرة بالمئة)، واكتب أسماء المعايير بالعربي (مثل: المعيار الدولي للتقرير المالي رقم خمسة عشر). بدون رموز أو اختصارات أو أقواس أو كلمات إنجليزية. لازم يتكلم عن نفس اللي ينكتب على السبورة في نفس الخطوة وبنفس الترتيب (اذكر الكلمات المكتوبة نفسها وأنت تشرحها)، ولا تتكلم عن شي ينكتب في خطوة ثانية. لا تقرأ السبورة حرفيًا فقط، بل اشرح ما تكتبه ولماذا.
 - السبورة: كلمات مفتاحية وأرقام ومعادلات فقط، بدون فقرات طويلة. من 1 إلى 3 عناصر في كل خطوة. أول خطوة فيها heading.
 - اكتب الأرقام بالأرقام 0-9 مع فواصل الآلاف. قيم amount في journal أرقام وليست نصوصًا.
 - سؤال اختيار من متعدد: اعرض كل الخيارات بعنصر options وmark = none، ثم في خطوات لاحقة أعد عرضها مع تعليم الخاطئة wrong والصحيحة right مع سبب الاستبعاد.
@@ -327,7 +327,8 @@ function penAt(x,y){const p=ensurePen();p.style.left=(x-4)+'px';p.style.top=(y-2
 async function writeWord(u,ctx){
   u.classList.add('on');
   const txt=u.textContent||'';
-  const dur=Math.max(160,Math.min(1100,txt.length*55/S.rate));
+  const per=ctx.charMs||(55/S.rate);
+  const dur=Math.max(90,Math.min(1400,txt.length*per));
   const rtl=AR.test(txt);
   const from=rtl?'inset(-45% 0 -45% 100%)':'inset(-45% 100% -45% 0)';
   const br=board.getBoundingClientRect(),r=u.getBoundingClientRect();
@@ -347,7 +348,7 @@ async function drawItems(group,items,ctx){
     const units=[...node.querySelectorAll('.draw, .w'),...node.querySelectorAll('.late')];
     for(const u of units){
       if(ctx.cancelled||ctx.skip){u.classList.add('on');continue;}
-      if(u.classList.contains('w')){u.style.transform='translateY('+((Math.random()-.5)*2.4).toFixed(1)+'px)';toBottom();await writeWord(u,ctx);await psleep(Math.round(70/S.rate),ctx);}
+      if(u.classList.contains('w')){u.style.transform='translateY('+((Math.random()-.5)*2.4).toFixed(1)+'px)';toBottom();await writeWord(u,ctx);await psleep(ctx.gapMs!=null?ctx.gapMs:Math.round(70/S.rate),ctx);}
       else{u.classList.add('on');await psleep(420,ctx);}
     }
     if(!ctx.skip&&!ctx.cancelled)await psleep(180,ctx);
@@ -404,7 +405,7 @@ function updGStatus(){const h=document.getElementById('gStatus');if(!h)return;
 function fillModels(){const sel=document.getElementById('mdlSel');if(sel)sel.value=/opus/.test(S.model)?'claude-opus-5-5':'claude-sonnet-5-5';}
 async function geminiTTS(text){
   if(!G.tts.length)throw Object.assign(new Error('no tts model'),{status:0});
-  const body={contents:[{parts:[{text:'اقرأ النص التالي بصوت مدرس سعودي ودود وواضح، بنبرة طبيعية كأنه يشرح لطالب قدامه:\n'+text}]}],generationConfig:{responseModalities:['AUDIO'],speechConfig:{voiceConfig:{prebuiltVoiceConfig:{voiceName:S.gVoice}}}}};
+  const body={contents:[{parts:[{text:text}]}],generationConfig:{responseModalities:['AUDIO'],speechConfig:{voiceConfig:{prebuiltVoiceConfig:{voiceName:S.gVoice}}}}};
   const r=await gFetch('/models/'+G.tts[0]+':generateContent',body);
   const j=await r.json().catch(()=>({}));
   if(!r.ok){const e=new Error((j.error&&j.error.message)||('HTTP '+r.status));e.status=r.status;throw e;}
@@ -485,6 +486,11 @@ async function runPlayer(ctx){
   }
   if(st.ctx===ctx){finishUI();}
 }
+function boardStrings(x,out){if(x==null)return out;if(typeof x==='string'||typeof x==='number'){out.push(String(x));return out;}
+  if(Array.isArray(x)){x.forEach(v=>boardStrings(v,out));return out;}
+  if(typeof x==='object'){for(const k in x){if(k==='t'||k==='type'||k==='color'||k==='mark')continue;boardStrings(x[k],out);}}return out;}
+function boardChars(b){return boardStrings(b,[]).join('').replace(/\s+/g,'').length;}
+function boardWords(b){return boardStrings(b,[]).join(' ').split(/\s+/).filter(Boolean).length;}
 async function playStep(step,ctx){
   ctx.skip=false;
   const thinking=st.section&&st.section.querySelector('.thinking');if(thinking)thinking.remove();
@@ -494,6 +500,17 @@ async function playStep(step,ctx){
   g.onclick=()=>{if(st.playing)return;const c=newCtx();st.ctx=c;$('#capText').textContent=step.say||'';$('#cap').classList.add('show');setStatus('يعيد الخطوة…','live');speak(step.say,c,step).then(()=>{if(st.ctx===c){setStatus('جاهز');}});};
   st.section.append(g);toBottom(true);
   $('#capText').textContent=step.say||'';setStatus('يشرح… خطوة '+st.stepN,'live');
+  // sync writing speed to the length of the spoken audio
+  ctx.charMs=null;ctx.gapMs=null;
+  let spoken=0;
+  if(!S.muted&&step.say){
+    if(cloudVoice()){if(!step.audioP)prefetch(step);setStatus('يجهّز الصوت…','think');const b=await step.audioP;if(b)spoken=b.duration/(b._gem?S.rate:1);}
+    if(!spoken)spoken=est(speakable(step.say))/1000;
+  }
+  const chars=boardChars(step.board),words=Math.max(1,boardWords(step.board));
+  if(spoken&&chars){const total=spoken*1000*0.92-words*40-((step.board||[]).length*400);
+    ctx.gapMs=40;ctx.charMs=Math.max(12,Math.min(90,total/chars));}
+  setStatus('يشرح… خطوة '+st.stepN,'live');
   await Promise.all([speak(step.say,ctx,step),drawItems(body,step.board,ctx)]);
   if(!ctx.cancelled&&!ctx.skip)await psleep(350,ctx);
   g.classList.remove('now');
