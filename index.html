@@ -508,16 +508,28 @@ function updPause(){$('#pauseBtn').innerHTML=st.paused?ICON_PLAY:ICON_PAUSE;}
 
 /* ---------- streaming parse ---------- */
 let parsed=0;
-function handleLine(line,ctx){
-  line=line.trim().replace(/^```(?:jsonl?|json)?/i,'').replace(/```$/,'').trim().replace(/,$/,'');
-  if(!line||line[0]!=='{')return;
-  try{const o=JSON.parse(line);if(o&&(o.say!=null||o.board)){if(!Array.isArray(o.board))o.board=o.board?[o.board]:[];st.queue.push(o);prefetch(o);wake();}}catch(e){}
-}
+function extractObjs(text){const out=[];let depth=0,start=-1,inStr=false,esc=false;
+  for(let i=0;i<text.length;i++){const c=text[i];
+    if(inStr){if(esc)esc=false;else if(c==='\\')esc=true;else if(c==='"')inStr=false;continue;}
+    if(c==='"'){inStr=true;continue;}
+    if(c==='{'){if(depth===0)start=i;depth++;}
+    else if(c==='}'&&depth>0){depth--;if(depth===0&&start>=0){out.push(text.slice(start,i+1));start=-1;}}}
+  return out;}
+function pushStep(o){if(!o||typeof o!=='object')return;
+  if(Array.isArray(o.steps)){o.steps.forEach(pushStep);return;}
+  if(o.say==null&&!o.board)return;
+  if(!Array.isArray(o.board))o.board=o.board?[o.board]:[];
+  st.queue.push(o);st.pushed++;prefetch(o);wake();}
 function onStream(text,ctx,final){
   if(ctx.cancelled)return;
-  const lines=String(text||'').split('\n');const upto=final?lines.length:lines.length-1;
-  for(let i=parsed;i<upto;i++)handleLine(lines[i],ctx);
-  parsed=Math.max(parsed,upto);
+  const objs=extractObjs(String(text||''));
+  for(let k=parsed;k<objs.length;k++){try{pushStep(JSON.parse(objs[k]));}catch(e){}}
+  parsed=objs.length;
+}
+function fallbackSteps(text){
+  const clean=String(text||'').replace(/```[a-z]*|```/gi,'').replace(/[#*_`]/g,'').trim();if(!clean)return;
+  const paras=clean.split(/\n\s*\n|\n(?=\s*[-•\d]+[.)-]?\s)/).map(p=>p.trim()).filter(Boolean).slice(0,14);
+  paras.forEach((p,i)=>pushStep({say:p,board:[i===0?{t:'heading',text:p.split(/[.\n:،]/)[0].slice(0,60)}:{t:'text',text:p}]}));
 }
 
 /* ---------- Gemini API ---------- */
@@ -531,16 +543,20 @@ function partsText(j){const parts=(((j.candidates||[])[0]||{}).content||{}).part
 async function callClaude(msgs,onText,signal){
   if(!G.loaded)await loadModels();
   const model=textModel();st.lastModel=model;
-  const body={contents:toGemini(msgs),generationConfig:{maxOutputTokens:8192}};
-  let text='';
+  const gc={maxOutputTokens:16384};
+  if(/gemini-2\.5/.test(model))gc.thinkingConfig={thinkingBudget:/lite/.test(model)?0:512};
+  else if(/gemini-[3-9]/.test(model))gc.thinkingConfig={thinkingLevel:'low'};
+  const body={systemInstruction:{parts:[{text:'أنت مدرس على سبورة. مخرجاتك دائمًا كائنات JSON بالصيغة المطلوبة في رسالة المستخدم، كل خطوة في سطر واحد، بدون أي نص خارجها.'}]},contents:toGemini(msgs),generationConfig:gc};
+  let text='';st.lastFinish='';
   try{
-    const res=await gFetch('/models/'+model+':streamGenerateContent?alt=sse',body,signal);
-    if(!res.ok)throw await gErr(res);
+    let res=await gFetch('/models/'+model+':streamGenerateContent?alt=sse',body,signal);
+    if(!res.ok){const er=await gErr(res);if(res.status===400&&/think/i.test(er.message)){delete gc.thinkingConfig;res=await gFetch('/models/'+model+':streamGenerateContent?alt=sse',body,signal);if(!res.ok)throw await gErr(res);}else throw er;}
     const reader=res.body.getReader(),dec=new TextDecoder();let buf='';
     for(;;){const {done,value}=await reader.read();if(done)break;buf+=dec.decode(value,{stream:true});let i;
       while((i=buf.indexOf('\n'))>=0){const line=buf.slice(0,i).trim();buf=buf.slice(i+1);
         if(!line.startsWith('data:'))continue;let j;try{j=JSON.parse(line.slice(5).trim());}catch(e){continue;}
         if(j.error)throw new Error(j.error.message||'خطأ');
+        const fr=((j.candidates||[])[0]||{}).finishReason;if(fr)st.lastFinish=fr;
         const add=partsText(j);if(add){text+=add;onText(text);}}}
     return text;
   }catch(e){
@@ -549,7 +565,7 @@ async function callClaude(msgs,onText,signal){
     $('#capText').textContent='…يحاول مرة ثانية بدون بث مباشر';
     const res=await gFetch('/models/'+model+':generateContent',body,signal);
     if(!res.ok)throw await gErr(res);
-    const j=await res.json();text=partsText(j);onText(text);return text;
+    const j=await res.json();st.lastFinish=((j.candidates||[])[0]||{}).finishReason||'';text=partsText(j);onText(text);return text;
   }
 }
 function imgToBlock(file){return new Promise((res,rej)=>{const im=new Image();im.onload=()=>{const m=1568;let w=im.naturalWidth,h=im.naturalHeight;const sc=Math.min(1,m/Math.max(w,h));w=Math.round(w*sc);h=Math.round(h*sc);const c=document.createElement('canvas');c.width=w;c.height=h;c.getContext('2d').drawImage(im,0,0,w,h);res({type:'image',source:{type:'base64',media_type:'image/jpeg',data:c.toDataURL('image/jpeg',0.85).split(',')[1]}});};im.onerror=rej;im.src=URL.createObjectURL(file);});}
@@ -570,7 +586,7 @@ async function ask(question,isFollow){
   imgs.forEach(b=>{const im=el('img');im.src=URL.createObjectURL(b);qh.append(im);});
   sec.append(qh);const th=el('div','thinking');th.innerHTML='<div class="marker"><i></i><i></i><i></i></div><span>يقرأ السؤال ويجهّز الشرح…</span>';sec.append(th);
   board.append(sec);st.section=sec;toBottom(true);
-  st.queue=[];st.streamDone=false;parsed=0;st.playing=true;$('#sendBtn').disabled=true;
+  st.queue=[];st.streamDone=false;parsed=0;st.pushed=0;st.playing=true;$('#sendBtn').disabled=true;
   $('#cap').classList.add('show');$('#capText').textContent='…';setStatus('يفكّر…','think');
   runPlayer(ctx);
   let blocks=[];try{blocks=await Promise.all(imgs.map(imgToBlock));}catch(e){}
@@ -579,7 +595,13 @@ async function ask(question,isFollow){
   const ac=new AbortController();ctx.abort=ac;
   try{
     const text=await callClaude(st.msgs,t=>onStream(t,ctx,false),ac.signal);
-    if(!ctx.cancelled){onStream(text,ctx,true);if(text)st.msgs.push({role:'assistant',content:text});else st.msgs.pop();}
+    if(!ctx.cancelled){
+      onStream(text,ctx,true);
+      if(!st.pushed&&text)fallbackSteps(text);
+      if(text)st.msgs.push({role:'assistant',content:text});
+      else{st.msgs.pop();const th2=sec.querySelector('.thinking');if(th2)th2.remove();
+        const fr=st.lastFinish;sec.append(el('div','err',fr==='SAFETY'||fr==='PROHIBITED_CONTENT'?'Gemini رفض يجاوب على هذا السؤال. جرّب صياغة ثانية.':fr==='MAX_TOKENS'?'النموذج استهلك كل وقته في التفكير. اختر نموذج «flash» ثاني من الإعدادات وجرب.':'Gemini رجّع رد فاضي'+(fr?' ('+fr+')':'')+' — النموذج: '+(st.lastModel||'?')+'. جرّب نموذج ثاني من الإعدادات.'));}
+    }
   }catch(e){
     if(!ctx.cancelled){st.msgs.pop();const th2=sec.querySelector('.thinking');if(th2)th2.remove();sec.append(el('div','err',errMsg(e)));}
   }finally{st.streamDone=true;wake();}
