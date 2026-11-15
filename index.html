@@ -403,20 +403,38 @@ function updGStatus(){const h=document.getElementById('gStatus');if(!h)return;
   else if(G.loaded)h.textContent=G.tts.length?'✅ الصوت جاهز: '+G.tts[0]:'⚠️ المفتاح شغال بس ما فيه نموذج صوت متاح';
   else h.textContent='يتحقق من المفتاح…';}
 function fillModels(){const sel=document.getElementById('mdlSel');if(sel)sel.value=/opus/.test(S.model)?'claude-opus-5-5':'claude-sonnet-5-5';}
-async function geminiTTS(text){
-  if(!G.tts.length)throw Object.assign(new Error('no tts model'),{status:0});
+async function geminiTTSOnce(model,text){
   const body={contents:[{parts:[{text:text}]}],generationConfig:{responseModalities:['AUDIO'],speechConfig:{voiceConfig:{prebuiltVoiceConfig:{voiceName:S.gVoice}}}}};
-  const r=await gFetch('/models/'+G.tts[0]+':generateContent',body);
+  const r=await gFetch('/models/'+model+':generateContent',body);
   const j=await r.json().catch(()=>({}));
   if(!r.ok){const e=new Error((j.error&&j.error.message)||('HTTP '+r.status));e.status=r.status;throw e;}
   const parts=(((j.candidates||[])[0]||{}).content||{}).parts||[];
-  const p=parts.find(x=>x.inlineData||x.inline_data);if(!p)throw new Error('no audio');
+  const p=parts.find(x=>x.inlineData||x.inline_data);if(!p){const e=new Error('ما رجع صوت ('+((((j.candidates||[])[0])||{}).finishReason||'?')+')');e.status='noaudio';throw e;}
   const d=p.inlineData||p.inline_data;const rate=parseInt(((d.mimeType||d.mime_type||'').match(/rate=(\d+)/)||[])[1]||'24000',10);
   const bin=atob(d.data);const n=bin.length>>1;
   if(!actx)actx=new (window.AudioContext||window.webkitAudioContext)();
   const ab=actx.createBuffer(1,n,rate);const ch=ab.getChannelData(0);
   for(let i=0;i<n;i++){let v=bin.charCodeAt(2*i)|(bin.charCodeAt(2*i+1)<<8);if(v>=32768)v-=65536;ch[i]=v/32768;}
   ab._gem=true;return ab;
+}
+let ttsChain=Promise.resolve();
+function geminiTTS(text){const p=ttsChain.then(()=>geminiTTSRun(text));ttsChain=p.catch(()=>{});return p;}
+async function geminiTTSRun(text){
+  if(!G.tts.length)throw Object.assign(new Error('ما فيه نموذج صوت متاح لمفتاحك'),{status:0});
+  let last=null;
+  const models=st.goodTTS?[st.goodTTS,...G.tts.filter(m=>m!==st.goodTTS)]:G.tts.slice();
+  for(const m of models.slice(0,3)){
+    for(const t of [text,'Say in a warm, clear teacher voice: '+text]){
+      try{const b=await geminiTTSOnce(m,t);st.goodTTS=m;return b;}
+      catch(e){last=e;if(e.status===401||e.status===403)throw e;
+        if(e.status===429){const sec=parseFloat(((e.message||'').match(/retry in ([\d.]+)s/i)||[])[1]||'0');
+          if(sec&&sec<=25&&!e._waited){$('#capText').textContent='…ينتظر '+Math.ceil(sec)+' ثانية (حد الصوت بالدقيقة)';await new Promise(r=>setTimeout(r,sec*1000+300));
+            try{const b=await geminiTTSOnce(m,t);st.goodTTS=m;return b;}catch(e2){last=e2;}}
+          break;}
+        if(e.status===404||e.status===503||e.status===500)break;}
+    }
+  }
+  throw last;
 }
 async function synth(text){
   if(S.engine==='gemini'&&K.gemini&&!G.loaded)await loadModels();
@@ -449,7 +467,7 @@ function playBuffer(buf,ctx){return new Promise(res=>{
   try{if(actx.state!=='running'&&!st.paused)actx.resume();src.start(0);}catch(e){fin();}
 });}
 function prefetch(step){if(cloudVoice()&&!S.muted&&step.say&&!step.audioP){step.audioP=synth(speakable(step.say));}}
-function azWarn(){if(st.azWarned)return;st.azWarned=true;const e=st.azErr;const g=st.errSrc==='gemini';const m=e&&e.status===429?(g?'خلصت حصة صوت Gemini المجانية مؤقتًا':'وصلت حد Azure'):e&&(e.status===401||e.status===403||e.status===400)?(g?'مفتاح Gemini ما يسمح بالصوت':'مفتاح Azure أو المنطقة غلط'):(g?'تعذّر صوت Gemini':'تعذّر صوت Azure');$('#capText').textContent='⚠️ '+m+' — يستخدم صوت الجهاز مؤقتًا. راجع الإعدادات.';}
+function azWarn(){if(st.azWarned)return;st.azWarned=true;const e=st.azErr;const g=st.errSrc==='gemini';const m=e&&e.status===429?(g?'خلصت حصة صوت Gemini المجانية مؤقتًا':'وصلت حد Azure'):e&&(e.status===401||e.status===403||e.status===400)?(g?'مفتاح Gemini ما يسمح بالصوت':'مفتاح Azure أو المنطقة غلط'):(g?'تعذّر صوت Gemini':'تعذّر صوت Azure');$('#capText').textContent='⚠️ '+m+(e&&e.message?' ['+e.message.slice(0,140)+']':'')+' — يستخدم صوت الجهاز مؤقتًا.';}
 async function speak(text,ctx,step){
   text=speakable(text);
   if(!text||ctx.cancelled||ctx.skip)return;
@@ -632,8 +650,8 @@ function submit(){
   const q=$('#q').value.trim();
   if(!q&&!st.images.length)return;
   if(!K.claude){openSettings();return;}
-  if(cloudVoice())unlockAudio();
-  else if(hasWeb&&!S.muted){try{const u=new SpeechSynthesisUtterance(' ');u.volume=0;speechSynthesis.speak(u);}catch(e){}}
+  unlockAudio();
+  if(hasWeb&&!S.muted){try{const u=new SpeechSynthesisUtterance(' ');u.volume=0;speechSynthesis.speak(u);}catch(e){}}
   const isFollow=st.msgs.length>0;
   ask(q||'اشرح السؤال اللي في الصورة',isFollow);
   $('#q').value='';autosize();
@@ -674,7 +692,7 @@ function fillVoices(){
   else{sel.append(el('option',null,'غير متاح'));sel.disabled=true;hint.textContent='';}
   $('#azFields').style.display=S.engine==='azure'?'':'none';
 }
-$('#testVoice').onclick=()=>{unlockAudio();stopSpeech();st.azWarned=false;speak('هلا والله، أنا مدرسك الخصوصي. خلنا نبدأ الدرس خطوة خطوة، وإذا ما فهمت أي نقطة اسألني على طول.',{cancelled:false,skip:false});};
+$('#testVoice').onclick=()=>{unlockAudio();if(hasWeb){try{const u=new SpeechSynthesisUtterance(' ');u.volume=0;speechSynthesis.speak(u);}catch(e){}}stopSpeech();st.azWarned=false;st.azErr=null;const h=$('#voiceHint');h.textContent='يجهّز الصوت…';setTimeout(()=>{h.textContent=st.azErr?('⚠️ '+(st.azErr.message||'خطأ')):(S.engine==='gemini'&&K.gemini?'✅ هذا صوت Gemini':'هذا صوت الجهاز');},9000);speak('هلا والله، أنا مدرسك الخصوصي. خلنا نبدأ الدرس خطوة خطوة، وإذا ما فهمت أي نقطة اسألني على طول.',{cancelled:false,skip:false});};
 $('#voiceSel').onchange=e=>{const v=e.target.value;if(v.startsWith('g:'))S.gVoice=v.slice(2);else if(v.startsWith('a:'))S.azVoice=v.slice(2);else if(v.startsWith('w:')){S.webVoiceURI=v.slice(2);pickWebVoice();}saveSet();};
 ['kClaude','kGemini','kAzure','kRegion'].forEach((id,i)=>{const k=['claude','gemini','azure','region'][i];const inp=document.getElementById(id);inp.value=K[k]||'';inp.addEventListener('change',()=>{K[k]=inp.value.trim();saveKeys();if(k==='gemini'){G.loaded=false;updGStatus();loadModels();}fillVoices();});});
 $('#mdlSel').onchange=e=>{S.model=e.target.value;saveSet();};
