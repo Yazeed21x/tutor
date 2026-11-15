@@ -15,6 +15,7 @@
   --board:#fcfcf9; --frame:#c9d1d9;
   --m-black:#1f2430; --m-blue:#1d4ed8; --m-red:#c8232c; --m-green:#14803c;
 }
+[hidden]{display:none!important}
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
 html,body{margin:0;height:100%}
 body{background:var(--bg);color:var(--ink);font-family:"IBM Plex Sans Arabic",system-ui,sans-serif;display:flex;flex-direction:column;height:100dvh;overflow:hidden}
@@ -382,7 +383,7 @@ async function loadModels(){
   G.loaded=false;G.err='';G.text=[];G.tts=[];
   if(!K.gemini){updGStatus();return;}
   try{
-    const r=await fetch(GBASE+'/models?pageSize=1000',{headers:{'x-goog-api-key':K.gemini.trim()}});
+    const r=await fetch(GBASE+'/models?pageSize=1000&key='+encodeURIComponent(K.gemini.trim()));
     const j=await r.json();
     if(!r.ok)throw new Error((j.error&&j.error.message)||('HTTP '+r.status));
     const ms=(j.models||[]).filter(m=>(m.supportedGenerationMethods||[]).includes('generateContent')).map(m=>m.name.replace(/^models\//,''));
@@ -403,7 +404,7 @@ function fillModels(){const sel=document.getElementById('mdlSel');if(!sel)return
 async function geminiTTS(text){
   if(!G.tts.length)throw Object.assign(new Error('no tts model'),{status:0});
   const body={contents:[{parts:[{text:'اقرأ النص التالي بصوت مدرس سعودي ودود وواضح، بنبرة طبيعية كأنه يشرح لطالب قدامه:\n'+text}]}],generationConfig:{responseModalities:['AUDIO'],speechConfig:{voiceConfig:{prebuiltVoiceConfig:{voiceName:S.gVoice}}}}};
-  const r=await fetch(GBASE+'/models/'+G.tts[0]+':generateContent',{method:'POST',headers:{'content-type':'application/json','x-goog-api-key':K.gemini.trim()},body:JSON.stringify(body)});
+  const r=await gFetch('/models/'+G.tts[0]+':generateContent',body);
   const j=await r.json().catch(()=>({}));
   if(!r.ok){const e=new Error((j.error&&j.error.message)||('HTTP '+r.status));e.status=r.status;throw e;}
   const parts=(((j.candidates||[])[0]||{}).content||{}).parts||[];
@@ -521,20 +522,35 @@ function onStream(text,ctx,final){
 
 /* ---------- Gemini API ---------- */
 function toGemini(msgs){return msgs.map(m=>({role:m.role==='assistant'?'model':'user',parts:(typeof m.content==='string'?[{type:'text',text:m.content}]:m.content).map(b=>b.type==='image'?{inline_data:{mime_type:b.source.media_type,data:b.source.data}}:{text:b.text})}));}
+async function gFetch(path,body,signal){
+  // key in query string -> fewer CORS surprises than a custom header
+  return fetch(GBASE+path+(path.includes('?')?'&':'?')+'key='+encodeURIComponent(K.gemini.trim()),{method:'POST',signal,headers:{'content-type':'application/json'},body:JSON.stringify(body)});
+}
+async function gErr(res){let m='';try{const j=await res.json();m=(j.error&&j.error.message)||'';}catch(e){}const err=new Error(m||('HTTP '+res.status));err.status=res.status;return err;}
+function partsText(j){const parts=(((j.candidates||[])[0]||{}).content||{}).parts||[];let t='';parts.forEach(p=>{if(p.text&&!p.thought)t+=p.text;});return t;}
 async function callClaude(msgs,onText,signal){
   if(!G.loaded)await loadModels();
-  const model=textModel();
-  const res=await fetch(GBASE+'/models/'+model+':streamGenerateContent?alt=sse',{method:'POST',signal,headers:{'content-type':'application/json','x-goog-api-key':K.gemini.trim()},body:JSON.stringify({contents:toGemini(msgs),generationConfig:{maxOutputTokens:8192}})});
-  if(!res.ok){let m='';try{const j=await res.json();m=(j.error&&j.error.message)||'';}catch(e){}const err=new Error(m||('HTTP '+res.status));err.status=res.status;throw err;}
-  const reader=res.body.getReader(),dec=new TextDecoder();let buf='',text='';
-  for(;;){const {done,value}=await reader.read();if(done)break;buf+=dec.decode(value,{stream:true});let i;
-    while((i=buf.indexOf('\n'))>=0){const line=buf.slice(0,i).trim();buf=buf.slice(i+1);
-      if(!line.startsWith('data:'))continue;let j;try{j=JSON.parse(line.slice(5).trim());}catch(e){continue;}
-      if(j.error)throw new Error(j.error.message||'خطأ');
-      const parts=(((j.candidates||[])[0]||{}).content||{}).parts||[];
-      let add='';parts.forEach(p=>{if(p.text&&!p.thought)add+=p.text;});
-      if(add){text+=add;onText(text);}}}
-  return text;
+  const model=textModel();st.lastModel=model;
+  const body={contents:toGemini(msgs),generationConfig:{maxOutputTokens:8192}};
+  let text='';
+  try{
+    const res=await gFetch('/models/'+model+':streamGenerateContent?alt=sse',body,signal);
+    if(!res.ok)throw await gErr(res);
+    const reader=res.body.getReader(),dec=new TextDecoder();let buf='';
+    for(;;){const {done,value}=await reader.read();if(done)break;buf+=dec.decode(value,{stream:true});let i;
+      while((i=buf.indexOf('\n'))>=0){const line=buf.slice(0,i).trim();buf=buf.slice(i+1);
+        if(!line.startsWith('data:'))continue;let j;try{j=JSON.parse(line.slice(5).trim());}catch(e){continue;}
+        if(j.error)throw new Error(j.error.message||'خطأ');
+        const add=partsText(j);if(add){text+=add;onText(text);}}}
+    return text;
+  }catch(e){
+    if(e.status||(signal&&signal.aborted)||text)throw e;
+    // network/stream failure -> one retry without streaming
+    $('#capText').textContent='…يحاول مرة ثانية بدون بث مباشر';
+    const res=await gFetch('/models/'+model+':generateContent',body,signal);
+    if(!res.ok)throw await gErr(res);
+    const j=await res.json();text=partsText(j);onText(text);return text;
+  }
 }
 function imgToBlock(file){return new Promise((res,rej)=>{const im=new Image();im.onload=()=>{const m=1568;let w=im.naturalWidth,h=im.naturalHeight;const sc=Math.min(1,m/Math.max(w,h));w=Math.round(w*sc);h=Math.round(h*sc);const c=document.createElement('canvas');c.width=w;c.height=h;c.getContext('2d').drawImage(im,0,0,w,h);res({type:'image',source:{type:'base64',media_type:'image/jpeg',data:c.toDataURL('image/jpeg',0.85).split(',')[1]}});};im.onerror=rej;im.src=URL.createObjectURL(file);});}
 function errMsg(e){const s=e&&e.status;const m=(e&&e.message)||'';
@@ -542,7 +558,7 @@ function errMsg(e){const s=e&&e.status;const m=(e&&e.message)||'';
   if(s===429||/quota|exhausted/i.test(m))return 'خلصت الحصة المجانية مؤقتًا (بالدقيقة أو اليوم). انتظر شوي وجرب، أو اختر نموذج ثاني من الإعدادات.';
   if(s===404)return 'النموذج غير متاح: '+m+' — اختر نموذج ثاني من الإعدادات.';
   if(s===503||/overloaded|unavailable/i.test(m))return 'خدمة Gemini مزحومة الحين. جرّب بعد شوي.';
-  if(/Failed to fetch|Load failed|NetworkError/i.test(m))return 'ما قدرت أتصل. تأكد من الإنترنت.';
+  if(/Failed to fetch|Load failed|NetworkError/i.test(m))return 'انقطع الاتصال مع Gemini ('+m+') — النموذج: '+(st.lastModel||'?')+'. افتح الإعدادات وشف هل يطلع ✅ متصل، وجرّب تختار نموذج ثاني من القائمة.';
   return 'صار خطأ: '+m;}
 
 /* ---------- ask ---------- */
